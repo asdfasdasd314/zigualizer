@@ -1,10 +1,10 @@
+const std = @import("std");
+const rl = @import("raylib");
 const sim_mod = @import("sim.zig");
 
 pub fn main() !void {
-    var sim = sim_mod.Sim {
-        .window_height = 480,
-        .window_width = 600,
-        .window_title = "Zigualizer", 
-    };
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var alloc = gpa.allocator();
+    var sim = try sim_mod.Sim.init(&alloc, 480, 680, 10, 0.1);
     try sim.run();
 }
