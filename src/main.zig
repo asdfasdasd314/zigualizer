@@ -7,4 +7,5 @@ pub fn main() !void {
     var alloc = gpa.allocator();
     var sim = try sim_mod.Sim.init(&alloc, 480, 680, 10, 0.1);
     try sim.run();
+    sim.deinit();
 }

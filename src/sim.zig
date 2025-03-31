@@ -1,7 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
-
-const MAX_COLUMNS = 20;
+const render = @import("render.zig");
 
 pub const Spectator = struct {
     allocator: *std.mem.Allocator,
@@ -15,9 +14,9 @@ pub const Spectator = struct {
 
     pub fn init(allocator: *std.mem.Allocator, movement_speed: f32, camera_sensitivity: f32) !Spectator {
         var camera = try allocator.create(rl.Camera3D);
-        camera.position = .init(4, 2, 4);
-        camera.target = .init(0, 1.8, 0);
-        camera.up = .init(0, 1, 0);
+        camera.position = rl.Vector3{ .x = 4, .y = 2, .z = 4 };
+        camera.target = rl.Vector3{ .x = 0, .y = 1.8, .z = 0 };
+        camera.up = rl.Vector3{ .x = 0, .y = 1, .z = 0 };
         camera.fovy = 60;
         camera.projection = .perspective;
 
@@ -36,7 +35,7 @@ pub const Spectator = struct {
     }
 
     pub fn update(self: *Spectator, delta_time: f32) void {
-        var position_change: rl.Vector3 = rl.Vector3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+        var position_change: rl.Vector3 = rl.Vector3{ .x = 0, .y = 0, .z = 0 };
         var yaw_radians = std.math.degreesToRadians(self.yaw);
         if (rl.isKeyDown(rl.KeyboardKey.w)) {
             position_change.z += @sin(yaw_radians);
@@ -106,7 +105,7 @@ pub const Sim = struct {
         );
 
         rl.disableCursor();
-        
+
         const spectator: *Spectator = try allocator.create(Spectator);
         spectator.* = try Spectator.init(allocator, movement_speed, camera_sensitivity);
 
@@ -124,26 +123,43 @@ pub const Sim = struct {
     }
 
     pub fn run(self: *Sim) !void {
-        defer rl.closeWindow();
-
-        var heights: [MAX_COLUMNS]f32 = undefined;
-        var positions: [MAX_COLUMNS]rl.Vector3 = undefined;
-        var colors: [MAX_COLUMNS]rl.Color = undefined;
-
-        for (0..heights.len) |i| {
-            heights[i] = @as(f32, @floatFromInt(rl.getRandomValue(1, 12)));
-            positions[i] = .init(
-                @as(f32, @floatFromInt(rl.getRandomValue(-15, 15))),
-                heights[i] / 2.0,
-                @as(f32, @floatFromInt(rl.getRandomValue(-15, 15))),
-            );
-            colors[i] = .init(
-                @as(u8, @intCast(rl.getRandomValue(20, 255))),
-                @as(u8, @intCast(rl.getRandomValue(10, 55))),
-                30,
-                255,
-            );
+        // Create some polygons
+        var polygon_points = try self.allocator.alloc([]rl.Vector3, 3);
+        defer {
+            for (polygon_points) |points| {
+                self.allocator.free(points);
+            }
+            self.allocator.free(polygon_points);
         }
+
+        // Create a triangle
+        polygon_points[0] = try self.allocator.alloc(rl.Vector3, 3);
+        polygon_points[0][0] = rl.Vector3{ .x = 0, .y = 0, .z = 0 };
+        polygon_points[0][1] = rl.Vector3{ .x = 1, .y = 0, .z = 0 };
+        polygon_points[0][2] = rl.Vector3{ .x = 0, .y = 1, .z = 0 };
+
+        // Create a square
+        polygon_points[1] = try self.allocator.alloc(rl.Vector3, 4);
+        polygon_points[1][0] = rl.Vector3{ .x = 0, .y = 0, .z = 1 };
+        polygon_points[1][1] = rl.Vector3{ .x = 1, .y = 0, .z = 1 };
+        polygon_points[1][2] = rl.Vector3{ .x = 1, .y = 1, .z = 1 };
+        polygon_points[1][3] = rl.Vector3{ .x = 0, .y = 1, .z = 1 };
+
+        // Create a pentagon
+        polygon_points[2] = try self.allocator.alloc(rl.Vector3, 5);
+        polygon_points[2][0] = rl.Vector3{ .x = 0, .y = 0, .z = 2 };
+        polygon_points[2][1] = rl.Vector3{ .x = 1, .y = 0, .z = 2 };
+        polygon_points[2][2] = rl.Vector3{ .x = 1.5, .y = 0.5, .z = 2 };
+        polygon_points[2][3] = rl.Vector3{ .x = 0.5, .y = 1, .z = 2 };
+        polygon_points[2][4] = rl.Vector3{ .x = -0.5, .y = 0.5, .z = 2 };
+
+        const polygons = [_]render.Polygon{
+            .{ .points = polygon_points[0], .color = rl.Color.red },
+            .{ .points = polygon_points[1], .color = rl.Color.blue },
+            .{ .points = polygon_points[2], .color = rl.Color.green },
+        };
+
+        defer rl.closeWindow();
 
         // I want the escape to escape the cursor being locked
         while (!(rl.windowShouldClose() and !rl.isKeyDown(rl.KeyboardKey.escape))) {
@@ -151,8 +167,7 @@ pub const Sim = struct {
                 if (self.cursor_enabled) {
                     rl.disableCursor();
                     self.cursor_enabled = false;
-                }
-                else {
+                } else {
                     rl.enableCursor();
                     self.cursor_enabled = true;
                 }
@@ -170,25 +185,18 @@ pub const Sim = struct {
                 self.spectator.camera.begin();
                 defer self.spectator.camera.end();
 
-                // Draw ground
-                rl.drawPlane(.init(0, 0, 0), .init(32, 32), .light_gray);
-                rl.drawCube(.init(-16.0, 2.5, 0.0), 1.0, 5.0, 32.0, .blue); // Draw a blue wall
-                rl.drawCube(.init(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, .lime); // Draw a green wall
-                rl.drawCube(.init(0.0, 2.5, 16.0), 32.0, 5.0, 1.0, .gold); // Draw a yellow wall
+                // Render axes
+                rl.drawLine3D(rl.Vector3{ .x = -1, .y = 0, .z = 0 }, rl.Vector3{ .x = 1, .y = 0, .z = 0 }, rl.Color.black);
+                rl.drawLine3D(rl.Vector3{ .x = 0, .y = -1, .z = 0 }, rl.Vector3{ .x = 0, .y = 1, .z = 0 }, rl.Color.black);
+                rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -1 }, rl.Vector3{ .x = 0, .y = 0, .z = 1 }, rl.Color.black);
 
-                // Draw some cubes around
-                for (heights, 0..) |height, i| {
-                    rl.drawCube(positions[i], 2.0, height, 2.0, colors[i]);
-                    rl.drawCubeWires(positions[i], 2.0, height, 2.0, .maroon);
+                // Render polygons
+                for (polygons) |polygon| {
+                    try polygon.render();
                 }
             }
 
-            rl.drawRectangle(10, 10, 220, 70, .fade(.sky_blue, 0.5));
-            rl.drawRectangleLines(10, 10, 220, 70, .blue);
-
-            rl.drawText("First person camera default controls:", 20, 20, 10, .black);
-            rl.drawText("- Move with keys: W, A, S, D", 40, 40, 10, .dark_gray);
-            rl.drawText("- Mouse move to look around", 40, 60, 10, .dark_gray);
+            rl.drawFPS(10, 10);
         }
     }
 };
