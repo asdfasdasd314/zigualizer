@@ -33,14 +33,6 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
             };
         }
 
-        pub fn get(self: *Matrix(rows, cols), row: usize, col: usize) f32 {
-            return self.contents[row][col];
-        }
-
-        pub fn set(self: *Matrix(rows, cols), row: usize, col: usize, value: f32) void {
-            self.contents[row][col] = value;
-        }
-
         pub fn setContents(self: *Matrix(rows, cols), contents: [rows][cols]f32) void {
             self.contents = contents;
         }
