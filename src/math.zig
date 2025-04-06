@@ -166,6 +166,14 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
 
             return det;
         }
+
+        pub fn inverse(self: *Matrix(rows, cols)) !*Matrix(rows, cols) {
+            if (!self.isSquare()) {
+                return null;
+            }
+            
+                
+        }
     };
 }
 
