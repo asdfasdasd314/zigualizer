@@ -120,6 +120,7 @@ pub const Sim = struct {
 
     pub fn deinit(self: *Sim) void {
         self.spectator.deinit();
+        self.allocator.destroy(self.spectator);
     }
 
     pub fn run(self: *Sim) !void {
