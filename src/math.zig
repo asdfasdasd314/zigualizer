@@ -308,8 +308,42 @@ pub const Plane = struct {
     }
 };
 
-pub fn sortPointsClockwise(points: []rl.Vector3) !void {
+const ComparisonAxis = struct {
+    root_point: *rl.Vector2,
+    helper_point: *rl.Vector2,
+};
 
+fn comparator(context: ComparisonAxis, lhs: rl.Vector2, rhs: rl.Vector2) bool {
+    const v1 = lhs.subtract(context.root_point);
+    const v2 = rhs.subtract(context.root_point);
+
+    const root_vec = context.root_point.subtract(context.helper_point);
+
+    const c1 = root_vec.dotProduct(v1) / root_vec.dotProduct(root_vec); // Cosine between lhs and root
+    const c2 = root_vec.dotProduct(v2) / root_vec.dotProduct(root_vec); // Cosine between rhs and root
+
+    return c1 > c2; // Greater cosine means smaller angle
+}
+
+fn findRootPoint(points: []rl.Vector2) *rl.Vector2 {
+    var min_index = 0;
+    for (0..points.len) |i| {
+        if (points[i].y < points[min_index].y) {
+            min_index = i;
+        }
+        else if (points[i].y == points[min_index].y and points[i].x < points[min_index].x) {
+            min_index = i;
+        }
+    }
+
+    return &points[min_index];
+}
+
+pub fn sortPointsClockwise(points: []rl.Vector2) !void {
+    // First get the root point
+    const root_point = findRootPoint(points);
+    const helper_point: rl.Vector2 = .{ .x = root_point.x - 1.0, .y = root_point.y };
+    std.mem.sort(rl.Vector2, points, ComparisonAxis{ .helper_point = helper_point, .root_point = root_point }, comparator);
 }
 
 // As this is a more trivial test, a 2x2 matrix is all that's necessary (I hope)
