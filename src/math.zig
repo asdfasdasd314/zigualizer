@@ -1,5 +1,5 @@
-const rl = @import("raylib");
 const std = @import("std");
+const rl = @import("raylib");
 
 /// Error types that can occur during matrix construction
 pub const MatrixConstructionError = error{
@@ -309,24 +309,29 @@ pub const Plane = struct {
 };
 
 const ComparisonAxis = struct {
-    root_point: *rl.Vector2,
-    helper_point: *rl.Vector2,
+    root_point: *const rl.Vector2,
+    helper_point: *const rl.Vector2,
 };
 
 fn comparator(context: ComparisonAxis, lhs: rl.Vector2, rhs: rl.Vector2) bool {
-    const v1 = lhs.subtract(context.root_point);
-    const v2 = rhs.subtract(context.root_point);
+    const v1 = lhs.subtract(context.root_point.*);
+    const v2 = rhs.subtract(context.root_point.*);
 
-    const root_vec = context.root_point.subtract(context.helper_point);
+    const root_vec = context.root_point.subtract(context.helper_point.*);
 
-    const c1 = root_vec.dotProduct(v1) / root_vec.dotProduct(root_vec); // Cosine between lhs and root
-    const c2 = root_vec.dotProduct(v2) / root_vec.dotProduct(root_vec); // Cosine between rhs and root
+    const c1 = root_vec.dotProduct(v1) / (root_vec.length() * v1.length()); // Cosine between lhs and root
+    const c2 = root_vec.dotProduct(v2) / (root_vec.length() * v2.length()); // Cosine between rhs and root
+
+    // If they're in line, the closer point is further around
+    if (c1 == c2) {
+        return v1.length() > v2.length();
+    }
 
     return c1 > c2; // Greater cosine means smaller angle
 }
 
-fn findRootPoint(points: []rl.Vector2) *rl.Vector2 {
-    var min_index = 0;
+fn findRootPoint(points: []rl.Vector2) *const rl.Vector2 {
+    var min_index: usize = 0;
     for (0..points.len) |i| {
         if (points[i].y < points[min_index].y) {
             min_index = i;
@@ -339,11 +344,89 @@ fn findRootPoint(points: []rl.Vector2) *rl.Vector2 {
     return &points[min_index];
 }
 
-pub fn sortPointsClockwise(points: []rl.Vector2) !void {
+pub fn sortPointsClockwise(allocator: *const std.mem.Allocator, points: []rl.Vector2) !void {
     // First get the root point
     const root_point = findRootPoint(points);
     const helper_point: rl.Vector2 = .{ .x = root_point.x - 1.0, .y = root_point.y };
-    std.mem.sort(rl.Vector2, points, ComparisonAxis{ .helper_point = helper_point, .root_point = root_point }, comparator);
+    var sorting_points: []rl.Vector2 = try allocator.alloc(rl.Vector2, points.len - 1);
+    defer allocator.free(sorting_points);
+
+    var new_i: usize = 0;
+    for (points) |point| {
+        if (point.equals(root_point.*) != 1) {
+            sorting_points[new_i] = point;
+            new_i += 1;
+        }
+    }
+
+    // Sort without the root point because that can mess things up
+    std.mem.sort(rl.Vector2, sorting_points, ComparisonAxis{ .helper_point = &helper_point, .root_point = root_point }, comparator);
+
+    // Put them back
+    points[0] = root_point.*;
+    for (0..sorting_points.len) |i| {
+        points[i + 1] = sorting_points[i];
+    }
+}
+
+test "sorts points counterclockwise" {
+    const alloc = std.testing.allocator;
+
+    var points1 = [_]rl.Vector2{
+        .{ .x = 0.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 1.0 },
+        .{ .x = 1.0, .y = 0.0 },
+        .{ .x = 0.0, .y = 1.0 },
+    };
+
+    try sortPointsClockwise(&alloc, &points1);
+
+    const expected1 = [_]rl.Vector2{
+        .{ .x = 0.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 1.0 },
+        .{ .x = 0.0, .y = 1.0 },
+    };
+
+    for (points1, 0..) |pt, i| {
+        try std.testing.expectEqual(pt.x, expected1[i].x);
+        try std.testing.expectEqual(pt.y, expected1[i].y);
+    }
+
+    var points2 = [_]rl.Vector2{
+        .{ .x = -2.89, .y = -2.74 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -4.65, .y = -0.44 },
+    };
+
+    const expected2 = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    try sortPointsClockwise(&alloc, &points2);
+
+    std.debug.print("Expected: {any}\nActual: {any}\n", .{expected2, points2});
+
+    for (points2, 0..) |pt, i| {
+        try std.testing.expectEqual(pt.x, expected2[i].x);
+        try std.testing.expectEqual(pt.y, expected2[i].y);
+    }
 }
 
 // As this is a more trivial test, a 2x2 matrix is all that's necessary (I hope)
