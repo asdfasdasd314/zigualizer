@@ -369,6 +369,78 @@ pub fn sortPointsClockwise(allocator: *const std.mem.Allocator, points: []rl.Vec
     }
 }
 
+fn isCounterClockwise(p: rl.Vector2, q: rl.Vector2, r: rl.Vector2) bool {
+    const cross = (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    if (cross == 0.0) {
+        return false;
+    }
+    else {
+        return cross > 0.0;
+    }
+}
+
+/// On the user to deinit the stack
+pub fn grahamScan(allocator: *const std.mem.Allocator, sorted_points: []rl.Vector2) !std.ArrayList(rl.Vector2) {
+    var stack = std.ArrayList(rl.Vector2).init(
+        allocator.*,
+    );
+
+    for (sorted_points) |point| {
+        while (stack.items.len > 1 and isCounterClockwise(
+            stack.items[stack.items.len - 1],
+            stack.items[stack.items.len - 2],
+            point
+        )) {
+            _ = stack.pop();
+        }
+
+        try stack.append(point);
+    }
+
+    // In the Rust code, there was a potential issue with lines or polygons?
+    // I think as long as I keep this in mind, I can move on from this because I'm doing things quite different
+    return stack;
+}
+
+test "graham's scan" {
+    const alloc = std.testing.allocator;
+
+    var points = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    const expected = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    const end = try grahamScan(&alloc, &points);
+    defer end.deinit();
+
+    try std.testing.expect(expected.len == end.items.len);
+    
+    for (expected, end.items) |p1, p2| {
+        try std.testing.expectEqual(p1.x, p2.x);
+        try std.testing.expectEqual(p1.y, p2.y);
+    }
+}
+
 test "sorts points counterclockwise" {
     const alloc = std.testing.allocator;
 
@@ -420,8 +492,6 @@ test "sorts points counterclockwise" {
     };
 
     try sortPointsClockwise(&alloc, &points2);
-
-    std.debug.print("Expected: {any}\nActual: {any}\n", .{expected2, points2});
 
     for (points2, 0..) |pt, i| {
         try std.testing.expectEqual(pt.x, expected2[i].x);
