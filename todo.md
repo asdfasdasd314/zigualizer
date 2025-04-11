@@ -2,8 +2,13 @@
 - Compute eigenvalues and eigenvectors
 
 # Rendering Stuff
+- Camera options
+    - Scroll wheel for speed
+    - Fixing in place
+        - Scrolling to scale axes
+        - Object creation menu
 - Render an object and its projection
-- Object creation menu
+- Animation
 
 # Clean Up
 - Create solid documentation for math functions
