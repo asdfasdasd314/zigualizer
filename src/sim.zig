@@ -1,6 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
-const render = @import("render.zig");
+const render_system = @import("render_system.zig");
 
 pub const Spectator = struct {
     allocator: *std.mem.Allocator,
@@ -92,10 +92,18 @@ pub const Sim = struct {
     window_width: i32,
 
     spectator: *Spectator,
+    render_system: *render_system.RenderSystem,
 
     cursor_enabled: bool,
 
-    pub fn init(allocator: *std.mem.Allocator, window_height: i32, window_width: i32, movement_speed: f32, camera_sensitivity: f32) !Sim {
+    pub fn init(
+        allocator: *std.mem.Allocator,
+        window_height: i32,
+        window_width: i32,
+        movement_speed: f32,
+        camera_sensitivity: f32,
+        renderables: []render_system.Renderable,
+    ) !Sim {
         rl.setConfigFlags(.{ .window_resizable = true });
 
         rl.initWindow(
@@ -109,57 +117,32 @@ pub const Sim = struct {
         const spectator: *Spectator = try allocator.create(Spectator);
         spectator.* = try Spectator.init(allocator, movement_speed, camera_sensitivity);
 
+        const render_system_ptr: *render_system.RenderSystem = try allocator.create(render_system.RenderSystem);
+        render_system_ptr.* = try render_system.RenderSystem.init(allocator);
+
+        // Add all renderables to the render system
+        for (renderables) |renderable| {
+            try render_system_ptr.addRenderable(renderable);
+        }
+
         return Sim{
             .allocator = allocator,
             .window_height = window_height,
             .window_width = window_width,
             .cursor_enabled = false,
             .spectator = spectator,
+            .render_system = render_system_ptr,
         };
     }
 
     pub fn deinit(self: *Sim) void {
         self.spectator.deinit();
+        self.render_system.deinit();
         self.allocator.destroy(self.spectator);
+        self.allocator.destroy(self.render_system);
     }
 
     pub fn run(self: *Sim) !void {
-        // Create some polygons
-        var polygon_points = try self.allocator.alloc([]rl.Vector3, 3);
-        defer {
-            for (polygon_points) |points| {
-                self.allocator.free(points);
-            }
-            self.allocator.free(polygon_points);
-        }
-
-        // Create a triangle
-        polygon_points[0] = try self.allocator.alloc(rl.Vector3, 3);
-        polygon_points[0][0] = rl.Vector3{ .x = 0, .y = 0, .z = 0 };
-        polygon_points[0][1] = rl.Vector3{ .x = 1, .y = 0, .z = 0 };
-        polygon_points[0][2] = rl.Vector3{ .x = 0, .y = 1, .z = 0 };
-
-        // Create a square
-        polygon_points[1] = try self.allocator.alloc(rl.Vector3, 4);
-        polygon_points[1][0] = rl.Vector3{ .x = 0, .y = 0, .z = 1 };
-        polygon_points[1][1] = rl.Vector3{ .x = 1, .y = 0, .z = 1 };
-        polygon_points[1][2] = rl.Vector3{ .x = 1, .y = 1, .z = 1 };
-        polygon_points[1][3] = rl.Vector3{ .x = 0, .y = 1, .z = 1 };
-
-        // Create a pentagon
-        polygon_points[2] = try self.allocator.alloc(rl.Vector3, 5);
-        polygon_points[2][0] = rl.Vector3{ .x = 0, .y = 0, .z = 2 };
-        polygon_points[2][1] = rl.Vector3{ .x = 1, .y = 0, .z = 2 };
-        polygon_points[2][2] = rl.Vector3{ .x = 1.5, .y = 0.5, .z = 2 };
-        polygon_points[2][3] = rl.Vector3{ .x = 0.5, .y = 1, .z = 2 };
-        polygon_points[2][4] = rl.Vector3{ .x = -0.5, .y = 0.5, .z = 2 };
-
-        const polygons = [_]render.Polygon{
-            .{ .points = polygon_points[0], .color = rl.Color.red },
-            .{ .points = polygon_points[1], .color = rl.Color.blue },
-            .{ .points = polygon_points[2], .color = rl.Color.green },
-        };
-
         defer rl.closeWindow();
 
         // I want the escape to escape the cursor being locked
@@ -191,10 +174,8 @@ pub const Sim = struct {
                 rl.drawLine3D(rl.Vector3{ .x = 0, .y = -1, .z = 0 }, rl.Vector3{ .x = 0, .y = 1, .z = 0 }, rl.Color.black);
                 rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -1 }, rl.Vector3{ .x = 0, .y = 0, .z = 1 }, rl.Color.black);
 
-                // Render polygons
-                for (polygons) |polygon| {
-                    try polygon.render();
-                }
+                // Render all objects using the render system
+                try self.render_system.renderAll();
             }
 
             rl.drawFPS(10, 10);
