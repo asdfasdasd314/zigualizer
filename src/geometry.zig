@@ -53,3 +53,13 @@ pub const Polygon = struct {
         }
     }
 };
+
+pub const Axes = struct {
+    size: f32,
+
+    pub fn render(self: *const Axes) !void {
+        rl.drawLine3D(rl.Vector3{ .x = -self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size, .y = 0, .z = 0 }, rl.Color.red);
+        rl.drawLine3D(rl.Vector3{ .x = 0, .y = -self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size, .z = 0 }, rl.Color.green);
+        rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -self.size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size }, rl.Color.blue);
+    }
+};

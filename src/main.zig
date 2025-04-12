@@ -55,7 +55,6 @@ pub fn main() !void {
     }
 
     renderables[polygons.len] = render_system.Renderable{ .cube = cube };
-
     var sim = try sim_mod.Sim.init(
         &alloc,
         window_height,

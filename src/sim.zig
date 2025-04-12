@@ -1,7 +1,7 @@
 const rl = @import("raylib");
 const std = @import("std");
 const render_system = @import("render_system.zig");
-
+const geometry = @import("geometry.zig");
 pub const Spectator = struct {
     allocator: *std.mem.Allocator,
     camera: *rl.Camera3D,
@@ -92,9 +92,12 @@ pub const Sim = struct {
     window_width: i32,
 
     spectator: *Spectator,
+    axes: *geometry.Axes,
     render_system: *render_system.RenderSystem,
 
-    cursor_enabled: bool,
+    in_menu: bool,
+
+    base_movement_speed: f32,
 
     pub fn init(
         allocator: *std.mem.Allocator,
@@ -125,13 +128,18 @@ pub const Sim = struct {
             try render_system_ptr.addRenderable(renderable);
         }
 
+        const axes: *geometry.Axes = try allocator.create(geometry.Axes);
+        axes.* = geometry.Axes{ .size = 10 };
+
         return Sim{
             .allocator = allocator,
             .window_height = window_height,
             .window_width = window_width,
-            .cursor_enabled = false,
+            .in_menu = false,
             .spectator = spectator,
             .render_system = render_system_ptr,
+            .base_movement_speed = movement_speed,
+            .axes = axes,
         };
     }
 
@@ -140,6 +148,11 @@ pub const Sim = struct {
         self.render_system.deinit();
         self.allocator.destroy(self.spectator);
         self.allocator.destroy(self.render_system);
+        self.allocator.destroy(self.axes);
+    }
+
+    pub fn toggle_menu(self: *Sim) void {
+        self.in_menu = !self.in_menu;
     }
 
     pub fn run(self: *Sim) !void {
@@ -148,37 +161,61 @@ pub const Sim = struct {
         // I want the escape to escape the cursor being locked
         while (!(rl.windowShouldClose() and !rl.isKeyDown(rl.KeyboardKey.escape))) {
             if (rl.isKeyPressed(rl.KeyboardKey.escape)) {
-                if (self.cursor_enabled) {
+                if (self.in_menu) {
                     rl.disableCursor();
-                    self.cursor_enabled = false;
+                    self.in_menu = false;
                 } else {
                     rl.enableCursor();
-                    self.cursor_enabled = true;
+                    self.in_menu = true;
                 }
             }
 
-            self.spectator.update(rl.getFrameTime());
+            // Handle mouse wheel input
+            const wheel_move = rl.getMouseWheelMove();
+            if (wheel_move != 0) {
+                if (self.in_menu) {
+                    // Scale axes in menu
+                    self.axes.size *= @exp(wheel_move * 0.1);
+                    // Ensure minimum scale
+                    self.axes.size = @max(0.1, self.axes.size);
+                } else {
+                    // Adjust movement speed when not in menu
+                    self.spectator.movement_speed = self.base_movement_speed * @exp(wheel_move * 0.1);
+                    // Ensure minimum speed
+                    self.spectator.movement_speed = @max(0.1, self.spectator.movement_speed);
+                }
+            }
 
-            // Render
+            // Begin drawing
             rl.beginDrawing();
             defer rl.endDrawing();
 
             rl.clearBackground(rl.Color.ray_white);
 
+            if (!self.in_menu) {
+                self.spectator.update(rl.getFrameTime());
+                rl.drawFPS(10, 10);
+            }
+
+            // Always render the 3D scene
             {
                 self.spectator.camera.begin();
                 defer self.spectator.camera.end();
 
-                // Render axes
-                rl.drawLine3D(rl.Vector3{ .x = -1, .y = 0, .z = 0 }, rl.Vector3{ .x = 1, .y = 0, .z = 0 }, rl.Color.black);
-                rl.drawLine3D(rl.Vector3{ .x = 0, .y = -1, .z = 0 }, rl.Vector3{ .x = 0, .y = 1, .z = 0 }, rl.Color.black);
-                rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -1 }, rl.Vector3{ .x = 0, .y = 0, .z = 1 }, rl.Color.black);
+                // Draw scaled axes
+                try self.axes.render();
 
-                // Render all objects using the render system
                 try self.render_system.renderAll();
             }
 
-            rl.drawFPS(10, 10);
+            // Draw menu on top if in menu
+            if (self.in_menu) {
+                rl.drawText("Zigualizer", 10, 10, 20, rl.Color.black);
+                rl.drawText("Press ESC to toggle menu", 10, 30, 20, rl.Color.black);
+                rl.drawText("Scroll to adjust axes scale", 10, 50, 20, rl.Color.black);
+            } else {
+                rl.drawText("Scroll to adjust movement speed", 10, 50, 20, rl.Color.black);
+            }
         }
     }
 };
