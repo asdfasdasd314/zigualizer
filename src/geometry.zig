@@ -69,14 +69,34 @@ pub const Polygon = struct {
 
 pub const Axes = struct {
     size: f32,
+    precision: i32,
+    thickness: f32 = 0.1,
+    arrow_radius: f32 = 0.3,
+    arrow_height: f32 = 1.0,
 
     pub fn scale(self: *Axes, scalar: f32) !void {
         self.size *= scalar;
+        self.arrow_radius *= scalar;
+        self.arrow_height *= scalar;
     }
 
     pub fn render(self: *Axes) !void {
-        rl.drawLine3D(rl.Vector3{ .x = -self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size, .y = 0, .z = 0 }, rl.Color.red);
-        rl.drawLine3D(rl.Vector3{ .x = 0, .y = -self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size, .z = 0 }, rl.Color.green);
-        rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -self.size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size }, rl.Color.blue);
+        // X-axis (red)
+        rl.drawCylinderEx(rl.Vector3{ .x = -self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size, .y = 0, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.red);
+        // X-axis arrows
+        rl.drawCylinderEx(rl.Vector3{ .x = self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size + self.arrow_height, .y = 0, .z = 0}, self.arrow_radius, 0, self.precision, rl.Color.red);
+        rl.drawCylinderEx(rl.Vector3{ .x = -self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = -self.size - self.arrow_height, .y = 0, .z = 0}, self.arrow_radius, 0, self.precision, rl.Color.red);
+
+        // Y-axis (green)
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.green);
+        // Y-axis arrows
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size + self.arrow_height, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.green);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = -self.size - self.arrow_height, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.green);
+
+        // Z-axis (blue)
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size }, self.thickness, self.thickness, self.precision, rl.Color.blue);
+        // Z-axis arrows
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = self.size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size + self.arrow_height }, self.arrow_radius, 0, self.precision, rl.Color.blue);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.size }, rl.Vector3{ .x = 0, .y = 0, .z = -self.size - self.arrow_height }, self.arrow_radius, 0, self.precision, rl.Color.blue);
     }
 };

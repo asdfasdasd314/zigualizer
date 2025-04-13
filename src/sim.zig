@@ -128,7 +128,7 @@ pub const Sim = struct {
         }
 
         const axes: *geometry.Axes = try allocator.create(geometry.Axes);
-        axes.* = geometry.Axes{ .size = 10 };
+        axes.* = geometry.Axes{ .size = 10, .precision = 20, .arrow_height = 0.5, .arrow_radius = 0.2 };
 
         return Sim{
             .allocator = allocator,
