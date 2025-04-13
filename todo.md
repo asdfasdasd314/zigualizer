@@ -5,6 +5,7 @@
 - Camera options
     - Fixing in place
         - Object creation menu
+        - Slider to adjust the size of objects and the axes instead of the scroll wheel
 - Render an object and its projection
 - Animation
 
