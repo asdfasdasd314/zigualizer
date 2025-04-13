@@ -2,6 +2,7 @@ const rl = @import("raylib");
 const std = @import("std");
 const render_system = @import("render_system.zig");
 const geometry = @import("geometry.zig");
+
 pub const Spectator = struct {
     allocator: *std.mem.Allocator,
     camera: *rl.Camera3D,
@@ -97,14 +98,12 @@ pub const Sim = struct {
 
     in_menu: bool,
 
-    base_movement_speed: f32,
-
     pub fn init(
         allocator: *std.mem.Allocator,
         window_height: i32,
         window_width: i32,
-        movement_speed: f32,
         camera_sensitivity: f32,
+        movement_speed: f32,
         renderables: []render_system.Renderable,
     ) !Sim {
         rl.setConfigFlags(.{ .window_resizable = true });
@@ -138,7 +137,6 @@ pub const Sim = struct {
             .in_menu = false,
             .spectator = spectator,
             .render_system = render_system_ptr,
-            .base_movement_speed = movement_speed,
             .axes = axes,
         };
     }
@@ -176,7 +174,7 @@ pub const Sim = struct {
                 if (self.in_menu) {
                     try self.render_system.scaleAll(@exp(wheel_move * 0.1));
                 } else {
-                    self.spectator.movement_speed = self.base_movement_speed * @exp(wheel_move * 0.2);
+                    self.spectator.movement_speed = self.spectator.movement_speed * @exp(wheel_move * 0.001);
                 }
             }
 

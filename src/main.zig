@@ -59,8 +59,8 @@ pub fn main() !void {
         &alloc,
         window_height,
         window_width,
-        movement_speed,
         camera_sensitivity,
+        movement_speed,
         renderables,
     );
     defer sim.deinit();

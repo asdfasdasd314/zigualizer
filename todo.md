@@ -7,7 +7,6 @@
         - Object creation menu
 - Render an object and its projection
 - Animation
-- Work on the scroll wheel and the spectator movement speed
 
 # Clean Up
 - Create solid documentation for math functions
