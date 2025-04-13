@@ -1,67 +1,69 @@
 const std = @import("std");
 const rl = @import("raylib");
 const sim_mod = @import("sim.zig");
-const math = @import("math.zig");
+const geometry = @import("geometry.zig");
+const render_system = @import("render_system.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var alloc = gpa.allocator();
-    // var sim = try sim_mod.Sim.init(&alloc, 480, 680, 10, 0.1);
-    // try sim.run();
-    // sim.deinit();
-
-    // Allocate space for contents
-    const contents = try alloc.alloc([]f32, 5);
-    defer alloc.free(contents);
-
-    for (0..5) |i| {
-        contents[i] = try alloc.alloc(f32, 5);
-    }
-
     defer {
-        for (0..5) |i| {
-            alloc.free(contents[i]);
+        const result = gpa.deinit();
+        if (result == .leak) {
+            std.debug.print("Memory leaks detected!\n", .{});
         }
     }
+    var alloc = gpa.allocator();
 
-    // Row 0
-    contents[0][0] = 0.732;
-    contents[0][1] = 0.143;
-    contents[0][2] = 0.881;
-    contents[0][3] = 0.550;
-    contents[0][4] = 0.321;
+    const window_width: i32 = 1280;
+    const window_height: i32 = 720;
+    const movement_speed: f32 = 5.0;
+    const camera_sensitivity: f32 = 0.1;
 
-    // Row 1
-    contents[1][0] = 0.620;
-    contents[1][1] = 0.458;
-    contents[1][2] = 0.278;
-    contents[1][3] = 0.716;
-    contents[1][4] = 0.035;
+    // Create polygon points
+    var polygon_points = try alloc.alloc([]rl.Vector3, 1);
+    defer {
+        for (polygon_points) |points| {
+            alloc.free(points);
+        }
+        alloc.free(polygon_points);
+    }
 
-    // Row 2
-    contents[2][0] = 0.987;
-    contents[2][1] = 0.104;
-    contents[2][2] = 0.391;
-    contents[2][3] = 0.204;
-    contents[2][4] = 0.674;
+    // Create a pentagon
+    polygon_points[0] = try alloc.alloc(rl.Vector3, 5);
+    polygon_points[0][0] = rl.Vector3{ .x = 0, .y = 0, .z = 2 };
+    polygon_points[0][1] = rl.Vector3{ .x = 1, .y = 0, .z = 2 };
+    polygon_points[0][2] = rl.Vector3{ .x = 1.5, .y = 0.5, .z = 2 };
+    polygon_points[0][3] = rl.Vector3{ .x = 0.5, .y = 1, .z = 2 };
+    polygon_points[0][4] = rl.Vector3{ .x = -0.5, .y = 0.5, .z = 2 };
 
-    // Row 3
-    contents[3][0] = 0.456;
-    contents[3][1] = 0.791;
-    contents[3][2] = 0.203;
-    contents[3][3] = 0.918;
-    contents[3][4] = 0.382;
+    // Create polygons
+    var polygons = try alloc.alloc(geometry.Polygon, 1);
+    defer alloc.free(polygons);
+    polygons[0] = geometry.Polygon{ .points = polygon_points[0], .color = rl.Color.red };
 
-    // Row 4
-    contents[4][0] = 0.217;
-    contents[4][1] = 0.660;
-    contents[4][2] = 0.330;
-    contents[4][3] = 0.889;
-    contents[4][4] = 0.078;
+    // Create a cube
+    const cube = try alloc.create(geometry.Cube);
+    cube.* = geometry.Cube{ .p0 = rl.Vector3{ .x = 0, .y = 0, .z = 0 }, .width = 1, .height = 1, .length = 1, .color = rl.Color.blue };
+    defer alloc.destroy(cube);
 
-    var mat = try math.Matrix.init(&alloc, contents);
-    std.debug.print("Matrix: {}\n", .{mat});
+    // Create renderables
+    var renderables = try alloc.alloc(render_system.Renderable, polygons.len + 1);
+    defer alloc.free(renderables);
 
-    const det = try mat.determinant();
-    std.debug.print("Determinant: {}\n", .{det.?});
+    for (polygons, 0..) |*polygon, i| {
+        renderables[i] = render_system.Renderable{ .polygon = polygon };
+    }
+
+    renderables[polygons.len] = render_system.Renderable{ .cube = cube };
+    var sim = try sim_mod.Sim.init(
+        &alloc,
+        window_height,
+        window_width,
+        camera_sensitivity,
+        movement_speed,
+        renderables,
+    );
+    defer sim.deinit();
+
+    try sim.run();
 }

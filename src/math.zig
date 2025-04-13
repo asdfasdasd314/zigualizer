@@ -1,11 +1,18 @@
-const rl = @import("raylib");
 const std = @import("std");
+const rl = @import("raylib");
 
+/// Error types that can occur during matrix construction
 pub const MatrixConstructionError = error{
+    /// The matrix has zero rows or columns
     InvalidSize,
+
+    /// The matrix has inconsistent row lengths
     InvalidShape,
 };
 
+/// A generic matrix type with compile-time known dimensions
+/// This type provides various matrix operations including multiplication, determinant calculation,
+/// and matrix inversion.
 pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
     return struct {
         allocator: *const std.mem.Allocator,
@@ -14,6 +21,13 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
         comptime cols: usize = cols,
         contents: [rows][cols]f32,
 
+        /// Initializes a new matrix with the given contents
+        ///
+        /// `allocator`: The memory allocator to use
+        ///
+        /// `contents`: The initial matrix values
+        ///
+        /// Returns: A new matrix or an error if the dimensions are invalid
         pub fn init(allocator: *const std.mem.Allocator, contents: [rows][cols]f32) MatrixConstructionError!Matrix(rows, cols) {
             if (contents.len == 0) {
                 return MatrixConstructionError.InvalidSize;
@@ -33,18 +47,18 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
             };
         }
 
-        pub fn get(self: *Matrix(rows, cols), row: usize, col: usize) f32 {
-            return self.contents[row][col];
-        }
-
-        pub fn set(self: *Matrix(rows, cols), row: usize, col: usize, value: f32) void {
-            self.contents[row][col] = value;
-        }
-
+        /// Updates the matrix contents with new values
+        ///
+        /// `contents`: The new matrix values
         pub fn setContents(self: *Matrix(rows, cols), contents: [rows][cols]f32) void {
             self.contents = contents;
         }
 
+        /// Checks if two matrices are equal by comparing their contents
+        ///
+        /// `other`: The matrix to compare against
+        ///
+        /// Returns: `true` if the matrices are equal, `false` otherwise
         pub fn equals(self: *const Matrix(rows, cols), other: *const Matrix(rows, cols)) bool {
             for (0..rows) |i| {
                 for (0..cols) |j| {
@@ -56,46 +70,53 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
             return true;
         }
 
-        /// Creates a new vector that is transformed based on the called matrix
-        /// It is on the caller of this function to free the memory
+        /// Transforms a vector using this matrix
+        /// The result is a new vector allocated using the matrix's allocator
+        ///
+        /// `vector`: The vector to transform
+        ///
+        /// Returns: A new transformed vector or an error if dimensions don't match
+        ///
+        /// Note: The caller is responsible for freeing the returned vector
         pub fn transformVector(self: *Matrix(rows, cols), vector: [cols]f32) ![]f32 {
             if (vector.len != self.cols) {
                 return error.InvalidSize;
             }
 
-            var result = try self.allocator.alloc(f32, vector.len);
-            @memset(result, 0);
+            var result = try self.allocator.alloc(f32, self.rows);
+            errdefer self.allocator.free(result);
 
             for (0..self.rows) |i| {
-                const row = self.contents[i];
-                for (row, vector) |v1, v2| {
-                    result[i] += v1 * v2;
+                result[i] = 0;
+                for (0..self.cols) |j| {
+                    result[i] += self.contents[i][j] * vector[j];
                 }
             }
 
             return result;
         }
 
-        /// Applies the `other` matrix to the first matrix like this:
+        /// Multiplies this matrix with another matrix
+        /// The result is a new matrix of dimensions [`rows` x `other_cols`]
         ///
-        /// `self = A`, `other = B`
+        /// `other_rows`: The number of rows in the other matrix
         ///
-        /// `self.applyMatrix(other) = AB`
+        /// `other_cols`: The number of columns in the other matrix
         ///
-        /// It is on the caller of this function to free the memory
+        /// `other`: The matrix to multiply with
+        ///
+        /// Returns: A new matrix or an error if dimensions are incompatible
+        ///
+        /// Note: The caller is responsible for freeing the returned matrix
         pub fn matrixMultiply(
             self: *Matrix(rows, cols),
             comptime other_rows: usize,
             comptime other_cols: usize,
-            other: *Matrix(other_rows, other_cols),
-        ) !*Matrix(rows, other_cols) {
+            other: *const Matrix(other_rows, other_cols),
+        ) !Matrix(rows, other_cols) {
             if (self.cols != other.rows) {
                 return error.MismatchedShapes;
             }
-
-            // First create the result matrix with undefined contents
-            const new_mat = try other.allocator.create(Matrix(rows, other_cols));
-            errdefer other.allocator.destroy(new_mat);
 
             // Initialize contents array
             var contents: [rows][other_cols]f32 = undefined;
@@ -109,21 +130,21 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
                 }
             }
 
-            // Initialize the matrix with our computed contents
-            new_mat.* = try Matrix(rows, other_cols).init(other.allocator, contents);
-            return new_mat;
+            return Matrix(rows, other_cols).init(other.allocator, contents);
         }
 
+        /// Checks if the matrix is square (has equal number of rows and columns)
+        ///
+        /// Returns: `true` if the matrix is square, `false` otherwise
         pub fn isSquare(self: *Matrix(rows, cols)) bool {
             return self.rows == self.cols;
         }
 
-        /// Use Gaussian elimination to find the determinant in O(n^3) time.
-        /// We can use Gaussian elimination because certain properties of the matrix will be preserved if we only use fundamental operations.
-        /// I can't explain exactly why rows can be added and multiplied and what not, but how that matrix changes some input vector will fundamentally not change
+        /// Calculates the determinant of the matrix using Gaussian elimination
         ///
-        /// As we live in the real world, we must round these values (f32 precision) and so it's guaranteed that precision will be lost, and perhaps for large enough matrices
-        /// it will not be accurate enough to do anything meaningful with the result
+        /// Returns: The determinant value or `null` if the matrix is not square
+        ///
+        /// Note: This operation has O(n^3) time complexity and may lose precision for large matrices
         pub fn determinant(self: *Matrix(rows, cols)) !?f32 {
             if (!self.isSquare()) {
                 return null;
@@ -174,7 +195,308 @@ pub fn Matrix(comptime rows: usize, comptime cols: usize) type {
 
             return det;
         }
+
+        /// Calculates the cofactor of a matrix element
+        ///
+        /// `row`: The row index of the element
+        ///
+        /// `col`: The column index of the element
+        ///
+        /// Returns: The cofactor value
+        pub fn cofactor(self: *Matrix(rows, cols), row: usize, col: usize) !f32 {
+            // The cofactor is the determinant of the submatrix obtained by removing the row and column of the element
+            var contents: [rows - 1][cols - 1]f32 = undefined;
+            for (0..rows) |i| {
+                for (0..cols) |j| {
+                    if (i == row or j == col) {
+                        continue;
+                    } else if (i > row and j > col) {
+                        contents[i - 1][j - 1] = self.contents[i][j];
+                    } else if (i > row) {
+                        contents[i - 1][j] = self.contents[i][j];
+                    } else if (j > col) {
+                        contents[i][j - 1] = self.contents[i][j];
+                    } else {
+                        contents[i][j] = self.contents[i][j];
+                    }
+                }
+            }
+
+            var submatrix = try Matrix(rows - 1, cols - 1).init(self.allocator, contents);
+
+            const det = try submatrix.determinant();
+            return det.? * std.math.pow(f32, -1, @as(f32, @floatFromInt(row)) + @as(f32, @floatFromInt(col)));
+        }
+
+        /// Creates the transpose of this matrix
+        ///
+        /// Returns: A new matrix that is the transpose of this matrix
+        pub fn transpose(self: *const Matrix(rows, cols)) !Matrix(cols, rows) {
+            var contents: [cols][rows]f32 = undefined;
+
+            // Initialize transposed matrix
+            for (0..cols) |i| {
+                for (0..rows) |j| {
+                    contents[i][j] = self.contents[j][i];
+                }
+            }
+
+            return Matrix(cols, rows).init(self.allocator, contents);
+        }
+
+        /// Calculates the inverse of this matrix
+        ///
+        /// Returns: A new matrix that is the inverse of this matrix, or `null` if the matrix is singular
+        pub fn inverse(self: *Matrix(rows, cols)) !?Matrix(rows, cols) {
+            // For a matrix to have an inverse, it must be square with a non-zero determinant
+            const det = try self.determinant();
+            if (!self.isSquare() or det == 0 or det == null) {
+                return null;
+            }
+
+            // Compute the cofactor matrix at every entry
+            var contents: [rows][cols]f32 = undefined;
+            for (0..rows) |i| {
+                for (0..cols) |j| {
+                    contents[i][j] = try self.cofactor(i, j);
+                }
+            }
+
+            // Transpose the cofactor matrix
+            const cofactor_matrix = try Matrix(rows, cols).init(self.allocator, contents);
+            const transposed = try cofactor_matrix.transpose();
+
+            // Multiply by the reciprocal of the determinant
+            var result_contents: [rows][cols]f32 = undefined;
+            for (0..rows) |i| {
+                for (0..cols) |j| {
+                    result_contents[i][j] = transposed.contents[i][j] * (1 / det.?);
+                }
+            }
+
+            const result = try Matrix(rows, cols).init(self.allocator, result_contents);
+            return result;
+        }
     };
+}
+
+/// Represents a plane in 3D space defined by a normal vector and a point
+pub const Plane = struct {
+    normal: rl.Vector3,
+    p0: rl.Vector3,
+
+    /// Creates a new plane from a normal vector and a point
+    ///
+    /// `normal`: The normal vector of the plane
+    ///
+    /// `p0`: A point on the plane
+    ///
+    /// Returns: A new plane
+    pub fn init(normal: rl.Vector3, p0: rl.Vector3) Plane {
+        return Plane{ .normal = normal, .p0 = p0 };
+    }
+
+    /// Projects a point onto the plane
+    ///
+    /// `point`: The point to project
+    ///
+    /// Returns: The projected point on the plane
+    pub fn project(self: *Plane, point: rl.Vector3) rl.Vector3 {
+        const v = point.subtract(self.p0);
+        const adjustment_magnitude = rl.Vector3.dotProduct(v, self.normal) / rl.Vector3.dotProduct(self.normal, self.normal);
+        return point.subtract(self.normal.scale(adjustment_magnitude));
+    }
+};
+
+const ComparisonAxis = struct {
+    root_point: *const rl.Vector2,
+    helper_point: *const rl.Vector2,
+};
+
+fn comparator(context: ComparisonAxis, lhs: rl.Vector2, rhs: rl.Vector2) bool {
+    const v1 = lhs.subtract(context.root_point.*);
+    const v2 = rhs.subtract(context.root_point.*);
+
+    const root_vec = context.root_point.subtract(context.helper_point.*);
+
+    const c1 = root_vec.dotProduct(v1) / (root_vec.length() * v1.length()); // Cosine between lhs and root
+    const c2 = root_vec.dotProduct(v2) / (root_vec.length() * v2.length()); // Cosine between rhs and root
+
+    // If they're in line, the closer point is further around
+    if (c1 == c2) {
+        return v1.length() > v2.length();
+    }
+
+    return c1 > c2; // Greater cosine means smaller angle
+}
+
+fn findRootPoint(points: []rl.Vector2) *const rl.Vector2 {
+    var min_index: usize = 0;
+    for (0..points.len) |i| {
+        if (points[i].y < points[min_index].y) {
+            min_index = i;
+        }
+        else if (points[i].y == points[min_index].y and points[i].x < points[min_index].x) {
+            min_index = i;
+        }
+    }
+
+    return &points[min_index];
+}
+
+pub fn sortPointsClockwise(allocator: *const std.mem.Allocator, points: []rl.Vector2) !void {
+    // First get the root point
+    const root_point = findRootPoint(points);
+    const helper_point: rl.Vector2 = .{ .x = root_point.x - 1.0, .y = root_point.y };
+    var sorting_points: []rl.Vector2 = try allocator.alloc(rl.Vector2, points.len - 1);
+    defer allocator.free(sorting_points);
+
+    var new_i: usize = 0;
+    for (points) |point| {
+        if (point.equals(root_point.*) != 1) {
+            sorting_points[new_i] = point;
+            new_i += 1;
+        }
+    }
+
+    // Sort without the root point because that can mess things up
+    std.mem.sort(rl.Vector2, sorting_points, ComparisonAxis{ .helper_point = &helper_point, .root_point = root_point }, comparator);
+
+    // Put them back
+    points[0] = root_point.*;
+    for (0..sorting_points.len) |i| {
+        points[i + 1] = sorting_points[i];
+    }
+}
+
+fn isCounterClockwise(p: rl.Vector2, q: rl.Vector2, r: rl.Vector2) bool {
+    const cross = (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    if (cross == 0.0) {
+        return false;
+    }
+    else {
+        return cross > 0.0;
+    }
+}
+
+/// On the user to deinit the stack
+pub fn grahamScan(allocator: *const std.mem.Allocator, sorted_points: []rl.Vector2) !std.ArrayList(rl.Vector2) {
+    var stack = std.ArrayList(rl.Vector2).init(
+        allocator.*,
+    );
+
+    for (sorted_points) |point| {
+        while (stack.items.len > 1 and isCounterClockwise(
+            stack.items[stack.items.len - 1],
+            stack.items[stack.items.len - 2],
+            point
+        )) {
+            _ = stack.pop();
+        }
+
+        try stack.append(point);
+    }
+
+    // In the Rust code, there was a potential issue with lines or polygons?
+    // I think as long as I keep this in mind, I can move on from this because I'm doing things quite different
+    return stack;
+}
+
+test "graham's scan" {
+    const alloc = std.testing.allocator;
+
+    var points = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    const expected = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    const end = try grahamScan(&alloc, &points);
+    defer end.deinit();
+
+    try std.testing.expect(expected.len == end.items.len);
+    
+    for (expected, end.items) |p1, p2| {
+        try std.testing.expectEqual(p1.x, p2.x);
+        try std.testing.expectEqual(p1.y, p2.y);
+    }
+}
+
+test "sorts points counterclockwise" {
+    const alloc = std.testing.allocator;
+
+    var points1 = [_]rl.Vector2{
+        .{ .x = 0.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 1.0 },
+        .{ .x = 1.0, .y = 0.0 },
+        .{ .x = 0.0, .y = 1.0 },
+    };
+
+    try sortPointsClockwise(&alloc, &points1);
+
+    const expected1 = [_]rl.Vector2{
+        .{ .x = 0.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 0.0 },
+        .{ .x = 1.0, .y = 1.0 },
+        .{ .x = 0.0, .y = 1.0 },
+    };
+
+    for (points1, 0..) |pt, i| {
+        try std.testing.expectEqual(pt.x, expected1[i].x);
+        try std.testing.expectEqual(pt.y, expected1[i].y);
+    }
+
+    var points2 = [_]rl.Vector2{
+        .{ .x = -2.89, .y = -2.74 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -4.65, .y = -0.44 },
+    };
+
+    const expected2 = [_]rl.Vector2{
+        .{ .x = -1.12, .y = -4.87 },
+        .{ .x = 2.75,  .y = -2.18 },
+        .{ .x = 4.11,  .y = 0.58 },
+        .{ .x = 0.31,  .y = -3.22 },
+        .{ .x = 3.43,  .y = 3.89 },
+        .{ .x = 1.01,  .y = 4.52 },
+        .{ .x = -1.57, .y = 4.27 },
+        .{ .x = -3.90, .y = 2.13 },
+        .{ .x = -4.65, .y = -0.44 },
+        .{ .x = -2.89, .y = -2.74 },
+    };
+
+    try sortPointsClockwise(&alloc, &points2);
+
+    for (points2, 0..) |pt, i| {
+        try std.testing.expectEqual(pt.x, expected2[i].x);
+        try std.testing.expectEqual(pt.y, expected2[i].y);
+    }
 }
 
 // As this is a more trivial test, a 2x2 matrix is all that's necessary (I hope)
@@ -186,14 +508,16 @@ test "matrix transform vector" {
     };
 
     const vector = [_]f32{ 1, 2 };
-
     const expected_result = [_]f32{ 1 * 1 + 2 * 2, 3 * 1 + 4 * 2 };
 
     var mat = try Matrix(2, 2).init(&alloc, contents);
     const result = try mat.transformVector(vector);
     defer alloc.free(result);
 
-    try std.testing.expect(std.mem.eql(f32, result, &expected_result));
+    // Compare the slices directly
+    for (result, 0..) |val, i| {
+        try std.testing.expect(std.math.approxEqAbs(f32, val, expected_result[i], 0.000001));
+    }
 }
 
 // As this is a more trivial test, a 2x2 matrix is all that's necessary (I hope)
@@ -218,7 +542,6 @@ test "matrix multiplication" {
     const expected_mat = try Matrix(2, 2).init(&alloc, expected_contents);
     var other_mat = try Matrix(2, 2).init(&alloc, other_contents);
     var result = try mat.matrixMultiply(2, 2, &other_mat);
-    defer alloc.destroy(result);
 
     try std.testing.expect(result.equals(&expected_mat));
 }
@@ -318,4 +641,101 @@ test "matrix 5x5 determinant" {
     mat.setContents(contents);
     const det2 = try mat.determinant();
     try std.testing.expect(std.math.approxEqAbs(f32, det2.?, 214.94, 0.001)); // Experimentally, this value makes sense for f32 and the size of determinant
+}
+
+test "matrix cofactor" {
+    const alloc = std.testing.allocator;
+    const contents = [_][3]f32{
+        [_]f32{ 1, 2, 3 },
+        [_]f32{ 4, 5, 6 },
+        [_]f32{ 7, 8, 9 },
+    };
+
+    var mat = try Matrix(3, 3).init(&alloc, contents);
+
+    // Test cofactor of element at (0,0)
+    const cof00 = try mat.cofactor(0, 0);
+    try std.testing.expect(std.math.approxEqAbs(f32, cof00, -3, 0.000001));
+
+    // Test cofactor of element at (1,1)
+    const cof11 = try mat.cofactor(1, 1);
+    try std.testing.expect(std.math.approxEqAbs(f32, cof11, -12, 0.000001));
+
+    // Test cofactor of element at (2,2)
+    const cof22 = try mat.cofactor(2, 2);
+    try std.testing.expect(std.math.approxEqAbs(f32, cof22, -3, 0.000001));
+}
+
+test "matrix transpose" {
+    const alloc = std.testing.allocator;
+    const contents = [_][3]f32{
+        [_]f32{ 1, 2, 3 },
+        [_]f32{ 4, 5, 6 },
+        [_]f32{ 7, 8, 9 },
+    };
+
+    var mat = try Matrix(3, 3).init(&alloc, contents);
+    const transposed = try mat.transpose();
+
+    // Check that the transpose is correct
+    try std.testing.expect(transposed.contents[0][0] == 1);
+    try std.testing.expect(transposed.contents[0][1] == 4);
+    try std.testing.expect(transposed.contents[0][2] == 7);
+    try std.testing.expect(transposed.contents[1][0] == 2);
+    try std.testing.expect(transposed.contents[1][1] == 5);
+    try std.testing.expect(transposed.contents[1][2] == 8);
+    try std.testing.expect(transposed.contents[2][0] == 3);
+    try std.testing.expect(transposed.contents[2][1] == 6);
+    try std.testing.expect(transposed.contents[2][2] == 9);
+}
+
+test "matrix inverse" {
+    const alloc = std.testing.allocator;
+
+    // Test with a non-invertible matrix (determinant = 0)
+    const singular_contents = [_][2]f32{
+        [_]f32{ 1, 2 },
+        [_]f32{ 2, 4 },
+    };
+    var singular_mat = try Matrix(2, 2).init(&alloc, singular_contents);
+    const inv1 = try singular_mat.inverse();
+    try std.testing.expect(inv1 == null);
+
+    // Test with an invertible matrix
+    const contents = [_][2]f32{
+        [_]f32{ 4, 7 },
+        [_]f32{ 2, 6 },
+    };
+    var mat = try Matrix(2, 2).init(&alloc, contents);
+    const inv2 = try mat.inverse();
+    try std.testing.expect(inv2 != null);
+    if (inv2) |inverse| {
+        // The inverse of [4 7; 2 6] should be [0.6 -0.7; -0.2 0.4]
+        try std.testing.expect(std.math.approxEqAbs(f32, inverse.contents[0][0], 0.6, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, inverse.contents[0][1], -0.7, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, inverse.contents[1][0], -0.2, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, inverse.contents[1][1], 0.4, 0.000001));
+    }
+}
+
+test "matrix inverse multiplication" {
+    const alloc = std.testing.allocator;
+    const contents = [_][2]f32{
+        [_]f32{ 4, 7 },
+        [_]f32{ 2, 6 },
+    };
+
+    var mat = try Matrix(2, 2).init(&alloc, contents);
+    const inv = try mat.inverse();
+    try std.testing.expect(inv != null);
+    if (inv) |inverse| {
+        // Multiply matrix by its inverse
+        const result = try mat.matrixMultiply(2, 2, &inverse);
+
+        // The result should be the identity matrix
+        try std.testing.expect(std.math.approxEqAbs(f32, result.contents[0][0], 1, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, result.contents[0][1], 0, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, result.contents[1][0], 0, 0.000001));
+        try std.testing.expect(std.math.approxEqAbs(f32, result.contents[1][1], 1, 0.000001));
+    }
 }
