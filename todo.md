@@ -3,12 +3,11 @@
 
 # Rendering Stuff
 - Camera options
-    - Scroll wheel for speed
     - Fixing in place
-        - Scrolling to scale axes
         - Object creation menu
 - Render an object and its projection
 - Animation
+- Work on the scroll wheel and the spectator movement speed
 
 # Clean Up
 - Create solid documentation for math functions

@@ -174,15 +174,9 @@ pub const Sim = struct {
             const wheel_move = rl.getMouseWheelMove();
             if (wheel_move != 0) {
                 if (self.in_menu) {
-                    // Scale axes in menu
-                    self.axes.size *= @exp(wheel_move * 0.1);
-                    // Ensure minimum scale
-                    self.axes.size = @max(0.1, self.axes.size);
+                    try self.render_system.scaleAll(@exp(wheel_move * 0.1));
                 } else {
-                    // Adjust movement speed when not in menu
-                    self.spectator.movement_speed = self.base_movement_speed * @exp(wheel_move * 0.1);
-                    // Ensure minimum speed
-                    self.spectator.movement_speed = @max(0.1, self.spectator.movement_speed);
+                    self.spectator.movement_speed = self.base_movement_speed * @exp(wheel_move * 0.2);
                 }
             }
 

@@ -37,9 +37,9 @@ pub fn main() !void {
     polygon_points[0][4] = rl.Vector3{ .x = -0.5, .y = 0.5, .z = 2 };
 
     // Create polygons
-    const polygons = [_]geometry.Polygon{
-        .{ .points = polygon_points[0], .color = rl.Color.red },
-    };
+    var polygons = try alloc.alloc(geometry.Polygon, 1);
+    defer alloc.free(polygons);
+    polygons[0] = geometry.Polygon{ .points = polygon_points[0], .color = rl.Color.red };
 
     // Create a cube
     const cube = try alloc.create(geometry.Cube);
@@ -50,8 +50,8 @@ pub fn main() !void {
     var renderables = try alloc.alloc(render_system.Renderable, polygons.len + 1);
     defer alloc.free(renderables);
 
-    for (polygons, 0..) |polygon, i| {
-        renderables[i] = render_system.Renderable{ .polygon = &polygon };
+    for (polygons, 0..) |*polygon, i| {
+        renderables[i] = render_system.Renderable{ .polygon = polygon };
     }
 
     renderables[polygons.len] = render_system.Renderable{ .cube = cube };

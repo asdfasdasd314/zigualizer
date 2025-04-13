@@ -13,11 +13,18 @@ pub const Cube = struct {
     length: f32,
     color: rl.Color,
 
-    pub fn render(self: *const Cube) !void {
+    pub fn render(self: *Cube) !void {
         rl.drawCube(self.p0, self.width, self.height, self.length, self.color);
     }
 
-    pub fn projectOntoPlane(self: *const Cube, plane: math.Plane) !void {
+    pub fn scale(self: *Cube, scalar: f32) !void {
+        self.p0 = self.p0.scale(scalar);
+        self.width *= scalar;
+        self.height *= scalar;
+        self.length *= scalar;
+    }
+
+    pub fn projectOntoPlane(self: *Cube, plane: math.Plane) !void {
         const points = [_]rl.Vector3{
             self.p0,
             self.p0.add(rl.Vector3{ .x = self.width, .y = 0, .z = 0 }),
@@ -40,8 +47,14 @@ pub const Polygon = struct {
     points: []rl.Vector3,
     color: rl.Color,
 
+    pub fn scale(self: *Polygon, scalar: f32) !void {
+        for (0..self.points.len) |i| {
+            self.points[i] = self.points[i].scale(scalar);
+        }
+    }
+
     /// It is assumed that the points provided as an input to this function are sorted CLOCKWISE, otherwise this function will not work
-    pub fn render(self: *const Polygon) !void {
+    pub fn render(self: *Polygon) !void {
         if (self.points.len < 3) {
             return InvalidPolygonError.TwoPoints;
         }
@@ -57,7 +70,11 @@ pub const Polygon = struct {
 pub const Axes = struct {
     size: f32,
 
-    pub fn render(self: *const Axes) !void {
+    pub fn scale(self: *Axes, scalar: f32) !void {
+        self.size *= scalar;
+    }
+
+    pub fn render(self: *Axes) !void {
         rl.drawLine3D(rl.Vector3{ .x = -self.size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size, .y = 0, .z = 0 }, rl.Color.red);
         rl.drawLine3D(rl.Vector3{ .x = 0, .y = -self.size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size, .z = 0 }, rl.Color.green);
         rl.drawLine3D(rl.Vector3{ .x = 0, .y = 0, .z = -self.size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size }, rl.Color.blue);
