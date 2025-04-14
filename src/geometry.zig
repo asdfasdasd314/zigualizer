@@ -68,15 +68,15 @@ pub const Polygon = struct {
 };
 
 pub const Axes = struct {
-    size: f32 = 1.0,
     precision: i32,
+    arrow_height: f32,
+    arrow_radius: f32,
+    scalar: f32 = 1.0,
+    default_size: f32,
     thickness: f32 = 0.1,
-    arrow_height: f32 = 0.5,
-    arrow_radius: f32 = 0.2,
-    default_size: f32 = 10.0,
 
-    pub fn setSize(self: *Axes, size: f32) !void {
-        self.size = size;
+    pub fn setScale(self: *Axes, scalar: f32) !void {
+        self.scalar = scalar;
     }
 
     pub fn setThickness(self: *Axes, thickness: f32) !void {
@@ -85,21 +85,21 @@ pub const Axes = struct {
 
     pub fn render(self: *Axes) !void {
         // X-axis (red)
-        rl.drawCylinderEx(rl.Vector3{ .x = -self.size * self.default_size, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size * self.default_size, .y = 0, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.red);
+        rl.drawCylinderEx(rl.Vector3{ .x = -self.default_size * self.scalar, .y = 0, .z = 0 }, rl.Vector3{ .x = self.default_size * self.scalar, .y = 0, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.red);
         // X-axis arrows
-        rl.drawCylinderEx(rl.Vector3{ .x = self.size * self.default_size + self.arrow_height, .y = 0, .z = 0 }, rl.Vector3{ .x = self.size * self.default_size, .y = 0, .z = 0 }, 0, self.arrow_radius, self.precision, rl.Color.red);
-        rl.drawCylinderEx(rl.Vector3{ .x = -self.size * self.default_size - self.arrow_height, .y = 0, .z = 0 }, rl.Vector3{ .x = -self.size * self.default_size, .y = 0, .z = 0 }, 0, self.arrow_radius, self.precision, rl.Color.red);
+        rl.drawCylinderEx(rl.Vector3{ .x = self.default_size * self.scalar, .y = 0, .z = 0 }, rl.Vector3{ .x = self.default_size * self.scalar + self.arrow_height, .y = 0, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.red);
+        rl.drawCylinderEx(rl.Vector3{ .x = -self.default_size * self.scalar, .y = 0, .z = 0 }, rl.Vector3{ .x = -self.default_size * self.scalar - self.arrow_height, .y = 0, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.red);
 
         // Y-axis (green)
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.size * self.default_size, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size * self.default_size, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.green);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.default_size * self.scalar, .z = 0 }, rl.Vector3{ .x = 0, .y = self.default_size * self.scalar, .z = 0 }, self.thickness, self.thickness, self.precision, rl.Color.green);
         // Y-axis arrows
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = self.size * self.default_size + self.arrow_height, .z = 0 }, rl.Vector3{ .x = 0, .y = self.size * self.default_size, .z = 0 }, 0, self.arrow_radius, self.precision, rl.Color.green);
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.size * self.default_size - self.arrow_height, .z = 0 }, rl.Vector3{ .x = 0, .y = -self.size * self.default_size, .z = 0 }, 0, self.arrow_radius, self.precision, rl.Color.green);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = self.default_size * self.scalar, .z = 0 }, rl.Vector3{ .x = 0, .y = self.default_size * self.scalar + self.arrow_height, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.green);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = -self.default_size * self.scalar, .z = 0 }, rl.Vector3{ .x = 0, .y = -self.default_size * self.scalar - self.arrow_height, .z = 0 }, self.arrow_radius, 0, self.precision, rl.Color.green);
 
         // Z-axis (blue)
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.size * self.default_size }, rl.Vector3{ .x = 0, .y = 0, .z = self.size * self.default_size }, self.thickness, self.thickness, self.precision, rl.Color.blue);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.default_size * self.scalar }, rl.Vector3{ .x = 0, .y = 0, .z = self.default_size * self.scalar }, self.thickness, self.thickness, self.precision, rl.Color.blue);
         // Z-axis arrows
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = self.size * self.default_size + self.arrow_height }, rl.Vector3{ .x = 0, .y = 0, .z = self.size * self.default_size }, 0, self.arrow_radius, self.precision, rl.Color.blue);
-        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.size * self.default_size - self.arrow_height }, rl.Vector3{ .x = 0, .y = 0, .z = -self.size * self.default_size }, 0, self.arrow_radius, self.precision, rl.Color.blue);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = self.default_size * self.scalar }, rl.Vector3{ .x = 0, .y = 0, .z = self.default_size * self.scalar + self.arrow_height }, self.arrow_radius, 0, self.precision, rl.Color.blue);
+        rl.drawCylinderEx(rl.Vector3{ .x = 0, .y = 0, .z = -self.default_size * self.scalar }, rl.Vector3{ .x = 0, .y = 0, .z = -self.default_size * self.scalar - self.arrow_height }, self.arrow_radius, 0, self.precision, rl.Color.blue);
     }
 };
