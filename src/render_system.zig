@@ -33,11 +33,11 @@ pub const RenderSystem = struct {
         try self.renderables.append(renderable);
     }
 
-    pub fn scaleAll(self: *RenderSystem, scalar: f32) !void {
+    pub fn setScale(self: *RenderSystem, scalar: f32) !void {
         for (self.renderables.items) |renderable| {
             switch (renderable) {
-                .polygon => |polygon| try polygon.scale(scalar),
-                .cube => |cube| try cube.scale(scalar),
+                .polygon => |polygon| try polygon.setSize(scalar),
+                .cube => |cube| try cube.setSize(scalar),
             }
         }
     }

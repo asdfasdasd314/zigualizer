@@ -1,4 +1,5 @@
 const rl = @import("raylib");
+const gui = @import("raygui");
 const std = @import("std");
 const render_system = @import("render_system.zig");
 const geometry = @import("geometry.zig");
@@ -97,6 +98,8 @@ pub const Sim = struct {
     render_system: *render_system.RenderSystem,
 
     in_menu: bool,
+    scale: f32,
+    axes_scale: f32,
 
     pub fn init(
         allocator: *std.mem.Allocator,
@@ -128,7 +131,7 @@ pub const Sim = struct {
         }
 
         const axes: *geometry.Axes = try allocator.create(geometry.Axes);
-        axes.* = geometry.Axes{ .size = 10, .precision = 20, .arrow_height = 0.5, .arrow_radius = 0.2 };
+        axes.* = geometry.Axes{ .precision = 20, .arrow_height = 0.5, .arrow_radius = 0.2, .default_size = 20.0 };
 
         return Sim{
             .allocator = allocator,
@@ -138,6 +141,8 @@ pub const Sim = struct {
             .spectator = spectator,
             .render_system = render_system_ptr,
             .axes = axes,
+            .scale = 1.0,
+            .axes_scale = 1.0,
         };
     }
 
@@ -170,12 +175,8 @@ pub const Sim = struct {
 
             // Handle mouse wheel input
             const wheel_move = rl.getMouseWheelMove();
-            if (wheel_move != 0) {
-                if (self.in_menu) {
-                    try self.render_system.scaleAll(@exp(wheel_move * 0.1));
-                } else {
-                    self.spectator.movement_speed = self.spectator.movement_speed * @exp(wheel_move * 0.001);
-                }
+            if (wheel_move != 0 and !self.in_menu) {
+                self.spectator.movement_speed = self.spectator.movement_speed * @exp(wheel_move * 0.001);
             }
 
             // Begin drawing
@@ -202,9 +203,32 @@ pub const Sim = struct {
 
             // Draw menu on top if in menu
             if (self.in_menu) {
-                rl.drawText("Zigualizer", 10, 10, 20, rl.Color.black);
-                rl.drawText("Press ESC to toggle menu", 10, 30, 20, rl.Color.black);
-                rl.drawText("Scroll to adjust axes scale", 10, 50, 20, rl.Color.black);
+                // Draw menu background
+                rl.drawRectangle(10, 10, 300, 250, rl.Color{ .r = 0, .g = 0, .b = 0, .a = 128 });
+
+                // Draw title and instructions
+                rl.drawText("Zigualizer", 20, 20, 20, rl.Color.white);
+                rl.drawText("Press ESC to toggle menu", 20, 40, 20, rl.Color.white);
+
+                // Draw object scale slider
+                rl.drawText("Object Scale", 20, 70, 20, rl.Color.white);
+                const obj_slider_bounds = rl.Rectangle{ .x = 20, .y = 100, .width = 260, .height = 20 };
+                const new_obj_scale = gui.guiSlider(obj_slider_bounds, "Scale", "", &self.scale, 0.1, 10.0);
+
+                // Update object scale if slider value changed
+                if (new_obj_scale != 1.0) {
+                    try self.render_system.setScale(self.scale);
+                }
+
+                // Draw axes scale slider
+                rl.drawText("Axes Scale", 20, 130, 20, rl.Color.white);
+                const axes_slider_bounds = rl.Rectangle{ .x = 20, .y = 160, .width = 260, .height = 20 };
+                const new_axes_scale = gui.guiSlider(axes_slider_bounds, "Scale", "", &self.axes_scale, 0.1, 10.0);
+
+                // Update axes scale if slider value changed
+                if (new_axes_scale != 1.0) {
+                    try self.axes.setSize(self.axes_scale);
+                }
             } else {
                 rl.drawText("Scroll to adjust movement speed", 10, 50, 20, rl.Color.black);
             }
