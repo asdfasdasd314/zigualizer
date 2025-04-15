@@ -2,6 +2,8 @@ const rl = @import("raylib");
 const gui = @import("raygui");
 const std = @import("std");
 const render_system = @import("render_system.zig");
+const TextInput = @import("widgets/TextInput.zig");
+const Button = @import("widgets/Button.zig");
 const geometry = @import("geometry.zig");
 
 pub const Spectator = struct {
@@ -94,112 +96,6 @@ pub const Spectator = struct {
     }
 };
 
-// Custom text input widget
-const TextInput = struct {
-    bounds: rl.Rectangle,
-    text: std.ArrayList(u8),
-    is_active: bool,
-    cursor_pos: usize,
-    cursor_timer: f32,
-    show_cursor: bool,
-
-    pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: []const u8) !TextInput {
-        var input = TextInput{
-            .bounds = bounds,
-            .text = std.ArrayList(u8).init(allocator.*),
-            .is_active = false,
-            .cursor_pos = 0,
-            .cursor_timer = 0,
-            .show_cursor = true,
-        };
-        try input.text.appendSlice(initial_text);
-        input.cursor_pos = input.text.items.len;
-        return input;
-    }
-
-    pub fn deinit(self: *TextInput) void {
-        self.text.deinit();
-    }
-
-    pub fn update(self: *TextInput, mouse_pos: rl.Vector2) !void {
-        // Update cursor blink
-        self.cursor_timer += rl.getFrameTime();
-        if (self.cursor_timer >= 0.5) {
-            self.cursor_timer = 0;
-            self.show_cursor = !self.show_cursor;
-        }
-
-        // Check for click
-        if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
-            self.is_active = rl.checkCollisionPointRec(mouse_pos, self.bounds);
-            if (self.is_active) {
-                // Calculate cursor position based on click
-                const click_x = mouse_pos.x - self.bounds.x;
-                var new_pos: usize = 0;
-                var text_width: f32 = 0;
-                const char_width: f32 = 12; // Approximate character width
-                while (new_pos < self.text.items.len) : (new_pos += 1) {
-                    if (text_width + char_width / 2 > click_x) break;
-                    text_width += char_width;
-                }
-                self.cursor_pos = new_pos;
-            }
-        }
-
-        if (self.is_active) {
-            // Handle text input
-            const key = rl.getCharPressed();
-            if (key != 0) {
-                if (self.text.items.len < 32) { // Limit text length
-                    try self.text.insert(self.cursor_pos, @intCast(key));
-                    self.cursor_pos += 1;
-                }
-            }
-
-            // Handle backspace
-            if (rl.isKeyPressed(rl.KeyboardKey.backspace) and self.cursor_pos > 0) {
-                _ = self.text.orderedRemove(self.cursor_pos - 1);
-                self.cursor_pos -= 1;
-            }
-
-            // Handle delete
-            if (rl.isKeyPressed(rl.KeyboardKey.delete) and self.cursor_pos < self.text.items.len) {
-                _ = self.text.orderedRemove(self.cursor_pos);
-            }
-
-            // Handle left arrow
-            if (rl.isKeyPressed(rl.KeyboardKey.left) and self.cursor_pos > 0) {
-                self.cursor_pos -= 1;
-            }
-
-            // Handle right arrow
-            if (rl.isKeyPressed(rl.KeyboardKey.right) and self.cursor_pos < self.text.items.len) {
-                self.cursor_pos += 1;
-            }
-        }
-    }
-
-    pub fn draw(self: *TextInput, allocator: *std.mem.Allocator) !void {
-        // Draw background
-        rl.drawRectangleRec(self.bounds, if (self.is_active) rl.Color.white else rl.Color{ .r = 200, .g = 200, .b = 200, .a = 255 });
-        rl.drawRectangleLinesEx(self.bounds, 1, if (self.is_active) rl.Color.blue else rl.Color.gray);
-
-        // Draw text
-        if (self.text.items.len > 0) {
-            const text_x = self.bounds.x + 5; // Left align text
-            const null_terminated = try std.fmt.allocPrintZ(allocator.*, "{s}", .{self.text.items});
-            defer allocator.free(null_terminated);
-            rl.drawText(null_terminated, @intFromFloat(text_x), @intFromFloat(self.bounds.y + 5), 20, rl.Color.black);
-        }
-
-        // Draw cursor
-        if (self.is_active and self.show_cursor) {
-            const cursor_x = self.bounds.x + 5 + @as(f32, @floatFromInt(self.cursor_pos)) * 12; // Left align cursor
-            rl.drawLine(@intFromFloat(cursor_x), @intFromFloat(self.bounds.y + 5), @intFromFloat(cursor_x), @intFromFloat(self.bounds.y + self.bounds.height - 5), rl.Color.black);
-        }
-    }
-};
-
 pub const Sim = struct {
     allocator: *std.mem.Allocator,
 
@@ -216,6 +112,7 @@ pub const Sim = struct {
     axes_thickness: f32,
     active_textbox: ?usize, // Track which textbox is active (0 for object scale, 1 for axes scale)
     text_inputs: [2]TextInput, // Store text input widgets
+    buttons: [2]Button, // Store button widgets
 
     scale_lower_bound: f32,
     scale_upper_bound: f32,
@@ -267,6 +164,7 @@ pub const Sim = struct {
             .axes_thickness = 0.1,
             .active_textbox = null,
             .text_inputs = undefined,
+            .buttons = undefined,
             .scale_lower_bound = 0.1,
             .scale_upper_bound = 100.0,
             .axes_scale_lower_bound = 0.1,
@@ -276,6 +174,10 @@ pub const Sim = struct {
         // Initialize text input widgets
         sim.text_inputs[0] = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 100, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.scale}));
         sim.text_inputs[1] = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 160, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.axes_scale}));
+
+        // Initialize button widgets
+        sim.buttons[0] = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 220, .width = 100, .height = 20 }, "Reset");
+        sim.buttons[1] = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 260, .width = 100, .height = 20 }, "Save");
 
         return sim;
     }
@@ -288,6 +190,8 @@ pub const Sim = struct {
         self.allocator.destroy(self.axes);
         self.text_inputs[0].deinit();
         self.text_inputs[1].deinit();
+        self.buttons[0].deinit();
+        self.buttons[1].deinit();
     }
 
     pub fn toggle_menu(self: *Sim) void {
@@ -368,6 +272,12 @@ pub const Sim = struct {
                 // Draw axes scale input
                 rl.drawText("Axes Scale", 20, 130, 20, rl.Color.white);
                 try self.text_inputs[1].draw(self.allocator);
+
+                // Update and draw buttons
+                try self.buttons[0].update(mouse_pos);
+                try self.buttons[1].update(mouse_pos);
+                try self.buttons[0].draw();
+                try self.buttons[1].draw();
 
                 // Handle enter key
                 if (rl.isKeyPressed(rl.KeyboardKey.enter)) {
