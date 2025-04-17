@@ -9,6 +9,7 @@ is_active: bool,
 cursor_pos: usize,
 cursor_timer: f32,
 show_cursor: bool,
+max_length: usize,
 
 pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: []const u8) !TextInput {
     var input = TextInput{
@@ -17,6 +18,7 @@ pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: [
         .is_active = false,
         .cursor_pos = 0,
         .cursor_timer = 0,
+        .max_length = 32,
         .show_cursor = true,
     };
     try input.text.appendSlice(initial_text);
@@ -57,10 +59,17 @@ pub fn update(self: *TextInput, mouse_pos: rl.Vector2) !void {
         // Handle text input
         const key = rl.getCharPressed();
         if (key != 0) {
-            if (self.text.items.len < 32) { // Limit text length
-                try self.text.insert(self.cursor_pos, @intCast(key));
-                self.cursor_pos += 1;
+            if (self.text.items.len > self.max_length) {
+                return;
             }
+
+            // Ensure only numbers are allowed
+            if (key < '0' or key > '9') {
+                return;
+            }
+
+            try self.text.insert(self.cursor_pos, @intCast(key));
+            self.cursor_pos += 1;
         }
 
         // Handle backspace
@@ -96,12 +105,12 @@ pub fn draw(self: *TextInput, allocator: *std.mem.Allocator) !void {
         const text_x = self.bounds.x + 5; // Left align text
         const null_terminated = try std.fmt.allocPrintZ(allocator.*, "{s}", .{self.text.items});
         defer allocator.free(null_terminated);
-        rl.drawText(null_terminated, @intFromFloat(text_x), @intFromFloat(self.bounds.y + 5), 20, rl.Color.black);
+        rl.drawText(null_terminated, @intFromFloat(text_x), @intFromFloat(self.bounds.y + 2), 20, rl.Color.black);
     }
 
     // Draw cursor
     if (self.is_active and self.show_cursor) {
         const cursor_x = self.bounds.x + 5 + @as(f32, @floatFromInt(self.cursor_pos)) * 12; // Left align cursor
-        rl.drawLine(@intFromFloat(cursor_x), @intFromFloat(self.bounds.y + 5), @intFromFloat(cursor_x), @intFromFloat(self.bounds.y + self.bounds.height - 5), rl.Color.black);
+        rl.drawLine(@intFromFloat(cursor_x), @intFromFloat(self.bounds.y + 2), @intFromFloat(cursor_x), @intFromFloat(self.bounds.y + self.bounds.height - 2), rl.Color.black);
     }
 }

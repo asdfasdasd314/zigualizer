@@ -9,8 +9,9 @@
 - Animation
 
 # Clean Up
+- There are memory leaks somewhere
 - Cleanup the GUI because it's sloppy, just wanted to get something down
-    - Is vulnerable to non-numerical inputs as of right now
+    - Raylib draws text so that each character takes up different length of space, so there is issue calculating cursor position
 - Soon need to do some code review and cleanup
 - Naming conventions (why is the visualizer/simulator "Sim"? Make things more descriptive/clearer)
 - Create solid documentation for math functions
