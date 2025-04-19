@@ -1,6 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
-
+const Sim = @import("../sim.zig").Sim;
 pub const TextInput = @This();
 
 bounds: rl.Rectangle,
@@ -11,8 +11,10 @@ cursor_pos: usize,
 cursor_timer: f32,
 show_cursor: bool,
 max_length: usize,
+sim: *Sim,
+on_update: ?*const fn (*TextInput, *Sim) void,
 
-pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: []const u8) !TextInput {
+pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: []const u8, on_update: ?*const fn (*TextInput, *Sim) void, sim: *Sim) !TextInput {
     var input = TextInput{
         .bounds = bounds,
         .text = std.ArrayList(u8).init(allocator.*),
@@ -22,6 +24,8 @@ pub fn init(allocator: *std.mem.Allocator, bounds: rl.Rectangle, initial_text: [
         .cursor_timer = 0,
         .max_length = 32,
         .show_cursor = true,
+        .on_update = on_update,
+        .sim = sim,
     };
     try input.text.appendSlice(initial_text);
     try input.temp_text.appendSlice(initial_text);
@@ -139,6 +143,11 @@ pub fn update(self: *TextInput, mouse_pos: rl.Vector2, allocator: *std.mem.Alloc
 
             self.is_active = false;
         }
+    }
+
+    // Call the update callback if it exists
+    if (self.on_update) |callback| {
+        callback(self, self.sim);
     }
 }
 

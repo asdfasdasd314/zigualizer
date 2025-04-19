@@ -43,10 +43,10 @@ pub const RenderSystem = struct {
     }
 
     /// Renders all objects in the system
-    pub fn renderAll(self: *const RenderSystem) !void {
+    pub fn renderAll(self: *const RenderSystem, wireframe: bool) !void {
         for (self.renderables.items) |renderable| {
             switch (renderable) {
-                .polygon => |polygon| try polygon.render(),
+                .polygon => |polygon| try polygon.render(wireframe),
                 .cube => |cube| try cube.render(),
             }
         }

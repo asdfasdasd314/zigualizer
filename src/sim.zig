@@ -4,97 +4,9 @@ const std = @import("std");
 const render_system = @import("render_system.zig");
 const TextInput = @import("widgets/TextInput.zig");
 const Button = @import("widgets/Button.zig");
+const Spectator = @import("Spectator.zig");
+const UIElement = @import("widgets/UIElement.zig");
 const geometry = @import("geometry.zig");
-
-pub const Spectator = struct {
-    allocator: *std.mem.Allocator,
-    camera: *rl.Camera3D,
-
-    camera_sensitivity: f32,
-    movement_speed: f32,
-
-    pitch: f32,
-    yaw: f32,
-
-    pub fn init(allocator: *std.mem.Allocator, movement_speed: f32, camera_sensitivity: f32) !Spectator {
-        var camera = try allocator.create(rl.Camera3D);
-        camera.position = rl.Vector3{ .x = 4, .y = 2, .z = 4 };
-        camera.target = rl.Vector3{ .x = 0, .y = 1.8, .z = 0 };
-        camera.up = rl.Vector3{ .x = 0, .y = 1, .z = 0 };
-        camera.fovy = 60;
-        camera.projection = .perspective;
-
-        return Spectator{
-            .allocator = allocator,
-            .camera = camera,
-            .camera_sensitivity = camera_sensitivity,
-            .movement_speed = movement_speed,
-            .pitch = 0.0,
-            .yaw = 89.0,
-        };
-    }
-
-    pub fn deinit(self: *Spectator) void {
-        self.allocator.destroy(self.camera);
-    }
-
-    pub fn update(self: *Spectator, delta_time: f32) void {
-        var position_change: rl.Vector3 = rl.Vector3{ .x = 0, .y = 0, .z = 0 };
-        var yaw_radians = std.math.degreesToRadians(self.yaw);
-        if (rl.isKeyDown(rl.KeyboardKey.w)) {
-            position_change.z += @sin(yaw_radians);
-            position_change.x += @cos(yaw_radians);
-        } else if (rl.isKeyDown(rl.KeyboardKey.s)) {
-            position_change.z += -@sin(yaw_radians);
-            position_change.x += -@cos(yaw_radians);
-        }
-        if (rl.isKeyDown(rl.KeyboardKey.a)) {
-            position_change.z += -@cos(yaw_radians);
-            position_change.x += @sin(yaw_radians);
-        } else if (rl.isKeyDown(rl.KeyboardKey.d)) {
-            position_change.z += @cos(yaw_radians);
-            position_change.x += -@sin(yaw_radians);
-        }
-        if (rl.isKeyDown(rl.KeyboardKey.space)) {
-            position_change.y += 1.0;
-        } else if (rl.isKeyDown(rl.KeyboardKey.left_shift)) {
-            position_change.y += -1.0;
-        }
-
-        // Normalize horizontal movement if moving diagonally
-        if (position_change.x != 0 and position_change.z != 0) {
-            const length = @sqrt(position_change.x * position_change.x + position_change.z * position_change.z);
-            position_change.x /= length;
-            position_change.z /= length;
-        }
-
-        position_change = position_change.scale(delta_time * self.movement_speed);
-
-        self.camera.position = self.camera.position.add(position_change);
-
-        // Also update target vector
-
-        // Get the mouse movement
-        const mouse_delta = rl.getMouseDelta();
-
-        self.pitch = std.math.clamp(self.pitch, -89.0, 89.0);
-
-        self.yaw += mouse_delta.x * self.camera_sensitivity;
-        self.pitch -= mouse_delta.y * self.camera_sensitivity;
-
-        yaw_radians = std.math.degreesToRadians(self.yaw);
-        const pitch_radians = std.math.degreesToRadians(self.pitch);
-
-        // Convert angles to direction vector
-        const direction = rl.Vector3{
-            .x = @cos(yaw_radians) * @cos(pitch_radians),
-            .y = @sin(pitch_radians),
-            .z = @sin(yaw_radians) * @cos(pitch_radians),
-        };
-
-        self.camera.target = self.camera.position.add(direction);
-    }
-};
 
 pub const Sim = struct {
     allocator: *std.mem.Allocator,
@@ -111,8 +23,8 @@ pub const Sim = struct {
     axes_scale: f32,
     axes_thickness: f32,
     active_textbox: ?usize, // Track which textbox is active (0 for object scale, 1 for axes scale)
-    text_inputs: [2]TextInput, // Store text input widgets
-    buttons: [2]Button, // Store button widgets
+
+    ui_elements: []UIElement,
 
     scale_lower_bound: f32,
     scale_upper_bound: f32,
@@ -163,21 +75,38 @@ pub const Sim = struct {
             .axes_scale = 1.0,
             .axes_thickness = 0.1,
             .active_textbox = null,
-            .text_inputs = undefined,
-            .buttons = undefined,
             .scale_lower_bound = 0.1,
             .scale_upper_bound = 100.0,
             .axes_scale_lower_bound = 0.1,
             .axes_scale_upper_bound = 100.0,
         };
 
+        global_sim = &sim; // Store the Sim instance globally
+
+        fn update_object_scale(text_input: *TextInput, sim: *Sim) void {
+            sim.scale = try text_input.getValue();
+            try sim.render_system.setScale(sim.scale);
+        }
+
+        fn update_axes_scale(text_input: *TextInput, sim: *Sim) void {
+            sim.axes_scale = try text_input.getValue();
+            try sim.axes.setScale(sim.axes_scale);
+        }
+
         // Initialize text input widgets
-        sim.text_inputs[0] = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 100, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.scale}));
-        sim.text_inputs[1] = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 160, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.axes_scale}));
+        const text_input1 = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 100, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.scale}));
+        const text_input2 = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 160, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.axes_scale}));
 
         // Initialize button widgets
-        sim.buttons[0] = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 220, .width = 100, .height = 20 }, "Reset");
-        sim.buttons[1] = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 260, .width = 100, .height = 20 }, "Save");
+        const button1 = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 220, .width = 100, .height = 20 }, "Reset");
+        const button2 = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 260, .width = 100, .height = 20 }, "Save");
+
+        const ui_element1 = try UIElement.init(text_input1);
+        const ui_element2 = try UIElement.init(text_input2);
+        const ui_element3 = try UIElement.init(button1);
+        const ui_element4 = try UIElement.init(button2);
+
+        sim.ui_elements = [_]UIElement{ ui_element1, ui_element2, ui_element3, ui_element4 };
 
         return sim;
     }
@@ -192,6 +121,7 @@ pub const Sim = struct {
         self.text_inputs[1].deinit();
         self.buttons[0].deinit();
         self.buttons[1].deinit();
+        global_sim = null; // Clear the global reference
     }
 
     pub fn toggle_menu(self: *Sim) void {
@@ -261,36 +191,14 @@ pub const Sim = struct {
 
                 const mouse_pos = rl.getMousePosition();
 
-                // Update and draw text inputs
-                try self.text_inputs[0].update(mouse_pos, self.allocator);
-                try self.text_inputs[1].update(mouse_pos, self.allocator);
-
-                const object_scale = try self.text_inputs[0].getValue();
-                const axes_scale = try self.text_inputs[1].getValue();
-
-                if (object_scale != self.scale) {
-                    self.scale = object_scale;
-                    try self.render_system.setScale(self.scale);
+                // Update and draw ui elements
+                for (self.ui_elements) |ui_element| {
+                    try ui_element.update(mouse_pos, self.allocator);
                 }
 
-                if (axes_scale != self.axes_scale) {
-                    self.axes_scale = axes_scale;
-                    try self.axes.setScale(self.axes_scale);
+                for (self.ui_elements) |ui_element| {
+                    try ui_element.draw(self.allocator);
                 }
-
-                // Draw object scale input
-                rl.drawText("Object Scale", 20, 70, 20, rl.Color.white);
-                try self.text_inputs[0].draw(self.allocator);
-
-                // Draw axes scale input
-                rl.drawText("Axes Scale", 20, 130, 20, rl.Color.white);
-                try self.text_inputs[1].draw(self.allocator);
-
-                // Update and draw buttons
-                try self.buttons[0].update(mouse_pos);
-                try self.buttons[1].update(mouse_pos);
-                try self.buttons[0].draw();
-                try self.buttons[1].draw();
 
                 // Draw axes thickness slider
                 rl.drawText("Axes Thickness", 20, 190, 20, rl.Color.white);

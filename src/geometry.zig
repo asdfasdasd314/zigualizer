@@ -54,7 +54,7 @@ pub const Polygon = struct {
     }
 
     /// It is assumed that the points provided as an input to this function are sorted CLOCKWISE, otherwise this function will not work
-    pub fn render(self: *Polygon) !void {
+    pub fn render(self: *Polygon, wireframe: bool) !void {
         if (self.points.len < 3) {
             return InvalidPolygonError.TwoPoints;
         }
@@ -63,6 +63,13 @@ pub const Polygon = struct {
             rl.drawTriangle3D(self.points[0].scale(self.size), self.points[i].scale(self.size), self.points[i + 1].scale(self.size), self.color);
             // We have to add the below line as well so that the backside of the polygon is also rendered
             rl.drawTriangle3D(self.points[0].scale(self.size), self.points[i + 1].scale(self.size), self.points[i].scale(self.size), self.color);
+        }
+
+        if (wireframe) {
+            for (1..self.points.len - 1) |i| {
+                rl.drawLine3D(self.points[0].scale(self.size), self.points[i].scale(self.size), rl.Color.black);
+                rl.drawLine3D(self.points[0].scale(self.size), self.points[i + 1].scale(self.size), rl.Color.black);
+            }
         }
     }
 };
