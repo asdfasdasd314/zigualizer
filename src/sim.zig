@@ -262,8 +262,21 @@ pub const Sim = struct {
                 const mouse_pos = rl.getMousePosition();
 
                 // Update and draw text inputs
-                try self.text_inputs[0].update(mouse_pos);
-                try self.text_inputs[1].update(mouse_pos);
+                try self.text_inputs[0].update(mouse_pos, self.allocator);
+                try self.text_inputs[1].update(mouse_pos, self.allocator);
+
+                const object_scale = try self.text_inputs[0].getValue();
+                const axes_scale = try self.text_inputs[1].getValue();
+
+                if (object_scale != self.scale) {
+                    self.scale = object_scale;
+                    try self.render_system.setScale(self.scale);
+                }
+
+                if (axes_scale != self.axes_scale) {
+                    self.axes_scale = axes_scale;
+                    try self.axes.setScale(self.axes_scale);
+                }
 
                 // Draw object scale input
                 rl.drawText("Object Scale", 20, 70, 20, rl.Color.white);
@@ -278,35 +291,6 @@ pub const Sim = struct {
                 try self.buttons[1].update(mouse_pos);
                 try self.buttons[0].draw();
                 try self.buttons[1].draw();
-
-                // Handle enter key
-                if (rl.isKeyPressed(rl.KeyboardKey.enter)) {
-                    if (self.text_inputs[0].is_active) {
-                        const parsed = try std.fmt.parseFloat(f32, self.text_inputs[0].text.items);
-                        if (parsed != 0.0) {
-                            if (parsed >= self.scale_lower_bound and parsed <= self.scale_upper_bound) {
-                                self.scale = parsed;
-                                try self.render_system.setScale(self.scale);
-                                // Update text to match new scale
-                                self.text_inputs[0].text.clearRetainingCapacity();
-                                try self.text_inputs[0].text.appendSlice(try std.fmt.allocPrint(self.allocator.*, "{d:.2}", .{self.scale}));
-                                self.text_inputs[0].cursor_pos = self.text_inputs[0].text.items.len;
-                            }
-                        }
-                    } else if (self.text_inputs[1].is_active) {
-                        const parsed = try std.fmt.parseFloat(f32, self.text_inputs[1].text.items);
-                        if (parsed != 0.0) {
-                            if (parsed >= self.axes_scale_lower_bound and parsed <= self.axes_scale_upper_bound) {
-                                self.axes_scale = parsed;
-                                try self.axes.setScale(self.axes_scale);
-                                // Update text to match new scale
-                                self.text_inputs[1].text.clearRetainingCapacity();
-                                try self.text_inputs[1].text.appendSlice(try std.fmt.allocPrint(self.allocator.*, "{d:.2}", .{self.axes_scale}));
-                                self.text_inputs[1].cursor_pos = self.text_inputs[1].text.items.len;
-                            }
-                        }
-                    }
-                }
 
                 // Draw axes thickness slider
                 rl.drawText("Axes Thickness", 20, 190, 20, rl.Color.white);
