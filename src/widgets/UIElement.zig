@@ -38,9 +38,9 @@ pub fn update(self: *UIElement, mouse_pos: rl.Vector2, allocator: *std.mem.Alloc
     }
 }
 
-pub fn draw(self: *UIElement, allocator: *std.mem.Allocator) !void {
+pub fn draw(self: *UIElement) !void {
     switch (self.element) {
-        .text_input => |text_input| text_input.draw(allocator),
+        .text_input => |text_input| text_input.draw(),
         .button => |button| button.draw(),
     }
 }

@@ -22,7 +22,6 @@ pub const Sim = struct {
     scale: f32,
     axes_scale: f32,
     axes_thickness: f32,
-    active_textbox: ?usize, // Track which textbox is active (0 for object scale, 1 for axes scale)
 
     ui_elements: []UIElement,
 
@@ -74,39 +73,76 @@ pub const Sim = struct {
             .scale = 1.0,
             .axes_scale = 1.0,
             .axes_thickness = 0.1,
-            .active_textbox = null,
+            .ui_elements = undefined,
             .scale_lower_bound = 0.1,
             .scale_upper_bound = 100.0,
             .axes_scale_lower_bound = 0.1,
             .axes_scale_upper_bound = 100.0,
         };
 
-        global_sim = &sim; // Store the Sim instance globally
+        // Define callback functions
+        const update_object_scale = struct {
+            fn callback(input: *TextInput, sim_ptr: *Sim) void {
+                if (input.getValue()) |value| {
+                    if (value >= sim_ptr.scale_lower_bound and value <= sim_ptr.scale_upper_bound) {
+                        sim_ptr.scale = value;
+                        sim_ptr.render_system.setScale(sim_ptr.scale) catch {};
+                    }
+                } else |_| {}
+            }
+        }.callback;
 
-        fn update_object_scale(text_input: *TextInput, sim: *Sim) void {
-            sim.scale = try text_input.getValue();
-            try sim.render_system.setScale(sim.scale);
-        }
+        const update_axes_scale = struct {
+            fn callback(input: *TextInput, sim_ptr: *Sim) void {
+                if (input.getValue()) |value| {
+                    if (value >= sim_ptr.axes_scale_lower_bound and value <= sim_ptr.axes_scale_upper_bound) {
+                        sim_ptr.axes_scale = value;
+                        sim_ptr.axes.setScale(sim_ptr.axes_scale) catch {};
+                    }
+                } else |_| {}
+            }
+        }.callback;
 
-        fn update_axes_scale(text_input: *TextInput, sim: *Sim) void {
-            sim.axes_scale = try text_input.getValue();
-            try sim.axes.setScale(sim.axes_scale);
-        }
+        const reset_object_scale = struct {
+            fn callback(_: *Button, sim_ptr: *Sim) void {
+                sim_ptr.scale = 1.0;
+                sim_ptr.axes_scale = 1.0;
+                sim_ptr.render_system.setScale(sim_ptr.scale) catch {};
+                sim_ptr.axes.setScale(sim_ptr.axes_scale) catch {};
+            }
+        }.callback;
 
         // Initialize text input widgets
-        const text_input1 = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 100, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.scale}));
-        const text_input2 = try TextInput.init(allocator, rl.Rectangle{ .x = 20, .y = 160, .width = 100, .height = 20 }, try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.axes_scale}));
+        const text_input1 = try TextInput.init(
+            allocator,
+            rl.Rectangle{ .x = 20, .y = 100, .width = 100, .height = 20 },
+            try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.scale}),
+            &update_object_scale,
+            &sim,
+        );
+
+        const text_input2 = try TextInput.init(
+            allocator,
+            rl.Rectangle{ .x = 20, .y = 160, .width = 100, .height = 20 },
+            try std.fmt.allocPrint(allocator.*, "{d:.2}", .{sim.axes_scale}),
+            &update_axes_scale,
+            &sim,
+        );
 
         // Initialize button widgets
-        const button1 = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 220, .width = 100, .height = 20 }, "Reset");
-        const button2 = try Button.init(allocator, rl.Rectangle{ .x = 20, .y = 260, .width = 100, .height = 20 }, "Save");
+        const button1 = try Button.init(
+            allocator,
+            rl.Rectangle{ .x = 20, .y = 220, .width = 100, .height = 20 },
+            "Reset",
+            &reset_object_scale,
+            &sim,
+        );
 
         const ui_element1 = try UIElement.init(text_input1);
         const ui_element2 = try UIElement.init(text_input2);
         const ui_element3 = try UIElement.init(button1);
-        const ui_element4 = try UIElement.init(button2);
 
-        sim.ui_elements = [_]UIElement{ ui_element1, ui_element2, ui_element3, ui_element4 };
+        sim.ui_elements = [_]UIElement{ ui_element1, ui_element2, ui_element3 };
 
         return sim;
     }
@@ -117,11 +153,9 @@ pub const Sim = struct {
         self.allocator.destroy(self.spectator);
         self.allocator.destroy(self.render_system);
         self.allocator.destroy(self.axes);
-        self.text_inputs[0].deinit();
-        self.text_inputs[1].deinit();
-        self.buttons[0].deinit();
-        self.buttons[1].deinit();
-        global_sim = null; // Clear the global reference
+        for (self.ui_elements) |ui_element| {
+            ui_element.deinit();
+        }
     }
 
     pub fn toggle_menu(self: *Sim) void {

@@ -9,6 +9,19 @@
 - Animation
 
 # Clean Up
+
+
+
+
+
+- Widget UI Elements
+    - Element itself
+        - Callback fn on update (defined during construction for each widget)
+
+
+
+
+
 - There are memory leaks somewhere
 - Cleanup the GUI because it's sloppy, just wanted to get something down
     - Raylib draws text so that each character takes up different length of space, so there is issue calculating cursor position
